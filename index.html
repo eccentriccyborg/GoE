@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f1f0ee">
+<title>Gallery of Epistles</title>
+<style>
+  :root {
+    --paper:#f1f0ee; --ink:#161616; --soft:#75736f;
+    --serif:"Iowan Old Style","Palatino Linotype","Book Antiqua",Georgia,serif;
+    --sans:"Avenir Next",Avenir,"Segoe UI",sans-serif;
+  }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  html,body { width:100%; height:100%; margin:0; overflow:hidden; background:var(--paper); color:var(--ink); font-family:var(--sans); }
+  button { font:inherit; color:inherit; }
+  .app { position:relative; width:100%; height:100%; overflow:hidden; background:var(--paper); isolation:isolate; }
+  .viewport {
+    position:absolute; inset:0; overflow:hidden;
+    cursor:grab; touch-action:none;
+    background:radial-gradient(ellipse at 53% 43%,rgba(255,255,255,.85),transparent 64%),linear-gradient(120deg,#f0efed,#f7f6f4 50%,#eeedeb);
+  }
+  .viewport.dragging { cursor:grabbing; }
+  .world { position:absolute; inset:0; will-change:transform; }
+  .network { position:absolute; inset:0; }
+  .thread {
+    position:absolute; left:0; top:0; height:1px; transform-origin:0 50%;
+    background:linear-gradient(90deg,transparent,rgba(43,43,42,.19) 15%,rgba(43,43,42,.19) 85%,transparent);
+    opacity:.76; pointer-events:none;
+  }
+  .node { position:absolute; left:0; top:0; perspective:950px; transform-style:preserve-3d; }
+  .flip-front { display:block; width:100%; height:100%; border:0; padding:0; background:transparent; color:inherit; cursor:pointer; perspective:1300px; }
+  .flip-front:focus-visible { outline:2px solid #333; outline-offset:7px; }
+  .node-core { display:block; position:relative; width:100%; height:100%; transform-style:preserve-3d; transition:transform .82s cubic-bezier(.2,.75,.15,1); }
+  .node.turned .node-core { transform:rotateY(180deg); }
+  .node-face { position:absolute; inset:0; display:block; overflow:hidden; backface-visibility:hidden; }
+  .front { background:rgba(255,255,255,.28); box-shadow:0 15px 36px rgba(20,20,20,.14); transition:box-shadow .3s; }
+  .front:hover { box-shadow:0 22px 48px rgba(20,20,20,.22); }
+  .painting { display:block; width:100%; height:100%; object-fit:contain; background:rgba(228,226,222,.42); }
+  .empty-painting {
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:10px;
+    border:1px solid rgba(42,42,40,.16); color:#686661; background:rgba(247,246,244,.55);
+    font:italic 14px var(--serif); text-align:center;
+  }
+  .empty-painting .plus { display:grid; place-items:center; width:26px; height:26px; flex:none; border:1px solid #99968e; border-radius:50%; font:20px var(--serif); }
+  .back { transform:rotateY(180deg); padding:10px; background:rgba(221,217,207,.9); box-shadow:0 18px 40px rgba(20,20,20,.16); }
+  .turn-back { position:absolute; z-index:2; top:14px; right:14px; width:25px; height:25px; border:1px solid #c0b49f; border-radius:50%; color:#665c4d; background:#faf7ef; cursor:pointer; font-size:15px; line-height:1; }
+  .turn-back:focus-visible { outline:2px solid #665c4d; outline-offset:2px; }
+  .letter-paper {
+    width:100%; height:100%; display:flex; flex-direction:column; padding:clamp(12px,2vw,22px);
+    border:1px solid #cfc5b4; color:#40382f;
+    background:repeating-linear-gradient(0deg,transparent 0 26px,rgba(119,101,77,.095) 27px),linear-gradient(140deg,#faf7ef,#ece3d3);
+  }
+  .letter-kicker { color:#8e7a5e; font-size:8px; letter-spacing:.18em; text-transform:uppercase; }
+  .letter-title { margin:13px 0 5px; color:#332c26; font:400 clamp(18px,2vw,26px)/1.05 var(--serif); }
+  .letter-meta { color:#867967; font-size:9px; letter-spacing:.045em; }
+  .letter-body { display:block; flex:1; min-height:0; margin:14px 0 0; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; touch-action:none; -webkit-overflow-scrolling:touch; user-select:text; cursor:auto; white-space:pre-wrap; scrollbar-width:thin; scrollbar-color:#a99b83 transparent; color:#584d40; font:clamp(12px,1.3vw,15px)/1.52 var(--serif); }
+  .letter-body::-webkit-scrollbar { width:5px; }
+  .letter-body::-webkit-scrollbar-thumb { border-radius:5px; background:#a99b83; }
+  .empty-letter { display:grid; place-items:center; height:100%; padding:14px; text-align:center; color:#867966; font:italic 15px/1.55 var(--serif); }
+  .identity { position:absolute; z-index:3; left:clamp(24px,4vw,62px); top:43%; width:min(35vw,440px); transform:translateY(-50%); pointer-events:none; }
+  .eyebrow { color:#686661; text-transform:uppercase; letter-spacing:.17em; font-size:10px; }
+  h1 { margin:15px 0; font:750 clamp(68px,10vw,130px)/.79 var(--sans); letter-spacing:-.085em; }
+  .identity-copy { max-width:310px; color:#716f6a; font:italic 17px/1.42 var(--serif); }
+  .identity-foot { margin-top:25px; color:#97948d; font-size:9px; letter-spacing:.12em; text-transform:uppercase; }
+  .topbar { position:absolute; z-index:4; top:0; left:0; right:0; display:flex; align-items:center; justify-content:space-between; padding:22px clamp(24px,4vw,62px); pointer-events:none; }
+  .brand { display:flex; align-items:center; gap:10px; color:#77746f; font-size:9px; letter-spacing:.2em; text-transform:uppercase; }
+  .brand-mark { width:22px; height:22px; display:grid; place-items:center; border:1px solid #a9a59d; border-radius:50%; color:#4c4a45; font:13px var(--serif); letter-spacing:0; }
+  .recenter {
+    pointer-events:auto; padding:9px 13px; border:1px solid #c8c5bf; border-radius:99px;
+    background:rgba(248,247,245,.76); color:#494742; cursor:pointer; font-size:10px; letter-spacing:.035em;
+    transition:background .2s,border-color .2s;
+  }
+  .recenter:hover { background:#fff; border-color:#89867f; }
+  .recenter:focus-visible { outline:2px solid #555; outline-offset:3px; }
+  .hint {
+    position:absolute; z-index:3; right:clamp(24px,4vw,62px); bottom:26px; max-width:340px;
+    color:#7b7872; text-align:right; font-size:10px; line-height:1.7; letter-spacing:.025em; pointer-events:none;
+  }
+  .hint strong { color:#45443f; font-weight:500; }
+  .touch-hint { display:none; }
+  .load-status { position:absolute; z-index:8; left:50%; top:15%; transform:translateX(-50%); max-width:min(520px,calc(100% - 40px)); padding:16px 20px; border:1px solid #c8c5bf; border-radius:8px; background:#faf9f7; box-shadow:0 12px 35px rgba(0,0,0,.12); color:#494742; text-align:center; font:14px/1.5 var(--sans); }
+  .crosshair { position:absolute; z-index:2; top:50%; left:50%; width:5px; height:5px; margin:-2px 0 0 -2px; border-radius:50%; background:#5d5b56; opacity:.45; pointer-events:none; }
+  .touch-pad { position:absolute; z-index:4; bottom:18px; left:18px; display:none; grid-template-columns:repeat(3,38px); grid-template-rows:repeat(2,38px); gap:4px; pointer-events:auto; }
+  .vertical-pad { position:absolute; z-index:4; bottom:18px; right:18px; display:none; grid-template-rows:repeat(2,38px); gap:4px; pointer-events:auto; }
+  .vertical-key { min-width:70px; font-size:11px; }
+  .move-key { border:1px solid #bcb9b2; border-radius:8px; color:#44423e; background:#faf9f7d9; font-size:15px; touch-action:none; }
+  .move-key[data-key="w"] { grid-column:2; grid-row:1; }
+  .move-key[data-key="a"] { grid-column:1; grid-row:2; }
+  .move-key[data-key="s"] { grid-column:2; grid-row:2; }
+  .move-key[data-key="d"] { grid-column:3; grid-row:2; }
+  .move-key:active { background:#dfdcd6; }
+  @media (max-width:750px) {
+    .identity { top:18%; left:22px; width:70vw; transform:none; }
+    h1 { margin:11px 0 10px; font-size:clamp(54px,13vw,88px); }
+    .eyebrow { font-size:8px; }
+    .identity-copy { max-width:230px; font-size:14px; }
+    .identity-foot { margin-top:12px; font-size:8px; }
+    .topbar { padding:16px; align-items:flex-start; }
+    .brand { font-size:7px; gap:7px; letter-spacing:.13em; }
+    .brand-mark { width:20px; height:20px; }
+    .recenter { padding:8px 10px; font-size:9px; }
+    .hint { right:16px; bottom:108px; max-width:calc(100% - 32px); font-size:9px; }
+    .touch-pad, .vertical-pad { display:grid; }
+    .desktop-hint { display:none; }
+    .touch-hint { display:inline; }
+  }
+  @media (prefers-reduced-motion:reduce) { *,*::before,*::after { transition-duration:.01ms!important; animation-duration:.01ms!important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="viewport" id="viewport" aria-label="A floating network of pictures and letters" tabindex="0">
+    <div class="world" id="world"><div class="network" id="network"></div></div>
+  </div>
+  <section class="identity" aria-label="A little collection for two">
+    <h1>sh<br>+nn</h1>
+    <div class="identity-copy">soups we hide in,<br>dream reels we run in</div>
+    <div class="identity-foot">a gallery of epistles</div>
+  </section>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">♡</span><span>A Gallery of Epistles</span></div>
+    <button class="recenter" id="recenter" type="button">Recenter</button>
+  </header>
+  <div class="crosshair" aria-hidden="true"></div>
+  <div class="load-status" id="load-status" role="alert" hidden></div>
+  <div class="hint"><span class="desktop-hint"><strong>W A S D</strong> move &nbsp;·&nbsp; <strong>Q / E</strong> rise or dip<br>Trackpad: scroll to move &nbsp;·&nbsp; Alt/Option-scroll to rise or dip<br>Drag to look around &nbsp;·&nbsp; Click an image to read</span><span class="touch-hint">Use the direction pad and Rise/Dip buttons<br>Drag to look around &nbsp;·&nbsp; Tap an image to read</span></div>
+  <div class="touch-pad" aria-label="Movement controls">
+    <button class="move-key" data-key="w" aria-label="Move forward">↑</button>
+    <button class="move-key" data-key="a" aria-label="Move left">←</button>
+    <button class="move-key" data-key="s" aria-label="Move backward">↓</button>
+    <button class="move-key" data-key="d" aria-label="Move right">→</button>
+  </div>
+  <div class="vertical-pad" aria-label="Rise and dip controls">
+    <button class="move-key vertical-key" data-key="q" aria-label="Rise">Rise ↑</button>
+    <button class="move-key vertical-key" data-key="e" aria-label="Dip">↓ Dip</button>
+  </div>
+</div>
+<script src="epistles.js" onerror="window.__epistlesLoadFailed=true"></script>
+<script>
+(function () {
+  "use strict";
+  var loadStatus=document.getElementById("load-status");
+  function reportLoadProblem(message) { loadStatus.textContent=message; loadStatus.hidden=false; }
+  window.addEventListener("error",function(event){
+    if(event.target && event.target.tagName==="SCRIPT") reportLoadProblem("The gallery could not load its code. Keep index.html and epistles.js together in the same folder.");
+    else if(event.target===window) reportLoadProblem("The gallery hit a page error: "+event.message);
+  },true);
+  try {
+  var seedPoints = [
+    {x:-265,y:-70,z:-760,w:280,h:198,ry:7,rx:-2,rz:-3},
+    {x:240,y:-220,z:-1420,w:235,h:170,ry:-5,rx:2,rz:2},
+    {x:720,y:45,z:-2260,w:305,h:210,ry:4,rx:0,rz:-2},
+    {x:-650,y:270,z:-1820,w:250,h:182,ry:-7,rx:3,rz:3},
+    {x:970,y:-280,z:-3260,w:265,h:186,ry:6,rx:-2,rz:2},
+    {x:-105,y:-345,z:-2940,w:220,h:160,ry:-4,rx:2,rz:-4},
+    {x:465,y:315,z:-4120,w:285,h:200,ry:3,rx:-1,rz:3},
+    {x:-910,y:-95,z:-4930,w:235,h:168,ry:-6,rx:2,rz:-2}
+  ];
+  var baseEdges = [[0,1],[0,3],[1,2],[1,5],[2,3],[2,4],[2,6],[3,5],[4,6],[5,6],[6,7]];
+  var fallbackEntries = [{"image":"images/img01.jpg","title":"A Highly Serious Poem About the love of my life","from":"from:\tNikitha Naveen <nikithanaveenwork@gmail.com>\nto: Sabal Handa <sabalhanda@gmail.com>","date":"Sep 26, 2026, 12:58 PM","letter":"\n\nMy dearest, I thought I’d try to write a poem for you,\nThough honestly, I’m not quite sure what poets do.\nI have lots of feelings and words in my head,\nSo I thought I would rhyme them instead.\n\nThere are so many things I could say,\nAbout why I like you more every day.\nYou’re funny and clever, and handsome as well,\nAnd you’ve got me completely under your spell.\n\nYou make me laugh till my tummy goes sore,\nThen say something witty and make me laugh more.\nYou’re clever and smart in a way that I like,\nAnd somehow your brain and mine just click right.\n\nYour brown hair is smooth, your fair skin is bright,\nAnd your beard grows back at an alarming height.\nPeople see you and think, “He’s foreign, I swear,”\nAnd honestly, I probably wouldn’t disagree there.\n\nYou’re the friend everyone knows they can call,\nThe one who will listen, no matter how small.\nYou show up for people, you’re steady and true,\nAnd somehow you always know just what to do.\n\nYou’ll sit through their stories, their drama and their tears,\nThe terrible choices your friends have made through the years.\nYou listen so patiently, never complain,\nAnd you’re always right there for them again and again.\n\nYou love silver and indigo, and I love you,\nSo clearly we both have excellent taste, both me and you.\nYou get me in a way that feels rare,\nYou understand all the strange little things that I share.\n\nI’m so lucky you’re my lover and muse,\nThough what to do with that title, I haven’t a clue.\nIf a real poet loved you, the world might be changed,\nWith beautiful art and your name beautifully framed.\n\nBut sadly for you, I am not one of those,\nI’m just me with some rhymes that occasionally flow.\nSo instead of great poems that the whole world would cite,\nYou’ll get my silly ones for the rest of your life.\n\nAnd if we were ducks, I know what we’d do:\nI’d be one silly duck, and you’d be one too.\nWe’d waddle around with absolutely no plan,\nProbably quack at each other and eat fish when we can.\n\nSo yes, you’re tall, smart, funny and fine,\nWith a moustache exactly like mine.\nYou’re kind, you’re sexy, and slightly absurd,\nI deeply, madly and truly love you, my favourite big bird."}];
+  var hasCollection = Array.isArray(window.EPISTLES) && window.EPISTLES.length > 0;
+  var entries = hasCollection ? window.EPISTLES : fallbackEntries;
+  if (!hasCollection) reportLoadProblem("Showing the saved preview. Keep epistles.js beside index.html to load your full collection.");
+  var positions = entries.map(function(entry,index){ return positionFor(index); });
+  var viewport = document.getElementById("viewport");
+  var world = document.getElementById("world");
+  var network = document.getElementById("network");
+  var camera = {x:0,y:0,z:0,yaw:0,pitch:0};
+  var keys = Object.create(null);
+  var dragging = false;
+  var previousPointer = null;
+  var driftTarget = {x:0,y:0};
+  var drift = {x:0,y:0};
+  var lastFrame = 0;
+
+  function positionFor(index) {
+    if (index < seedPoints.length) return seedPoints[index];
+    var extra = index - seedPoints.length;
+    var layer = Math.floor(extra / 6);
+    var spoke = extra % 6;
+    var angle = spoke * Math.PI / 3 + layer * .38;
+    var radius = 620 + layer * 180;
+    return {
+      x:Math.cos(angle)*radius, y:Math.sin(angle)*350 + (layer%2 ? 170 : -100),
+      z:-5480-layer*920, w:[230,270,300][index%3], h:[164,190,210][index%3],
+      ry:Math.cos(angle)*7, rx:Math.sin(angle)*3, rz:(spoke%2 ? 3 : -3)
+    };
+  }
+  function makeEdges() {
+    var result = baseEdges.filter(function(edge){ return edge[0] < entries.length && edge[1] < entries.length; });
+    for (var i=seedPoints.length;i<entries.length;i++) {
+      result.push([i-1,i]);
+      if (i-4 >= 0) result.push([i-4,i]);
+    }
+    return result;
+  }
+  function createThread(aIndex,bIndex) {
+    var line=document.createElement("div");
+    line.className="thread";
+    line.dataset.a=String(aIndex);
+    line.dataset.b=String(bIndex);
+    network.appendChild(line);
+  }
+  function createNode(item,index) {
+    item=item || {};
+    var p=positions[index], title=String(item.title || "").trim();
+    var node=document.createElement("article");
+    node.className="node";
+    node.dataset.positionIndex=String(index);
+    node.style.left="0px";
+    node.style.top="0px";
+    node.innerHTML=
+      '<div class="node-core">' +
+        '<button class="node-face front flip-front" type="button"><span class="empty-painting"><span class="plus">+</span><span>Set image path in epistles.js</span></span><img class="painting" alt="" hidden></button>' +
+        '<div class="node-face back"><span class="letter-paper"><span class="empty-letter">Add letter text in epistles.js.</span></span><button class="turn-back" type="button" aria-label="Turn picture back">↶</button></div>' +
+      '</div>';
+    var button=node.querySelector(".flip-front");
+    var back=node.querySelector(".back");
+    var backButton=node.querySelector(".turn-back");
+    button.setAttribute("aria-label",title ? "Turn over "+title : "Turn over image "+(index+1));
+    var image=node.querySelector(".painting");
+    if (item.image) {
+      image.alt=title ? title : "Picture "+(index+1);
+      image.onload=function(){node.querySelector(".empty-painting").hidden=true;image.hidden=false;};
+      image.onerror=function(){image.hidden=true;node.querySelector(".empty-painting").hidden=false;};
+      image.src=String(item.image);
+    }
+    var paper=node.querySelector(".letter-paper");
+    if (title || item.from || item.date || item.letter) {
+      paper.innerHTML=
+        '<span class="letter-kicker">A note from your inbox</span>' +
+        '<span class="letter-title"></span><span class="letter-meta"></span>' +
+        '<div class="letter-body" tabindex="0" role="region" aria-label="Letter text. Scroll to read the whole letter."></div>';
+      paper.querySelector(".letter-title").textContent=title || "A note to keep";
+      paper.querySelector(".letter-meta").textContent=[item.date,item.from].filter(Boolean).join(" · ");
+      var letterBody=paper.querySelector(".letter-body");
+      letterBody.textContent=String(item.letter || "");
+      var scrollGesture=null;
+      letterBody.addEventListener("pointerdown",function(event){
+        event.stopPropagation();
+        letterBody.focus({preventScroll:true});
+        scrollGesture={id:event.pointerId,y:event.clientY,top:letterBody.scrollTop};
+        try { letterBody.setPointerCapture(event.pointerId); } catch(error) {}
+      });
+      letterBody.addEventListener("pointermove",function(event){
+        if (!scrollGesture || scrollGesture.id!==event.pointerId) return;
+        letterBody.scrollTop=scrollGesture.top-(event.clientY-scrollGesture.y);
+      });
+      function finishLetterScroll(){scrollGesture=null;}
+      letterBody.addEventListener("pointerup",finishLetterScroll);
+      letterBody.addEventListener("pointercancel",finishLetterScroll);
+      letterBody.addEventListener("click",function(event){event.preventDefault();event.stopPropagation();});
+    }
+    function setTurned(turned) {
+      node.classList.toggle("turned",turned);
+      button.setAttribute("aria-pressed",String(turned));
+    }
+    button.addEventListener("click",function(){
+      setTurned(true);
+    });
+    backButton.addEventListener("click",function(event){
+      event.stopPropagation();
+      setTurned(false);
+    });
+    back.addEventListener("click",function(event){
+      if (event.target.closest(".letter-body") || event.target.closest(".turn-back")) return;
+      setTurned(false);
+    });
+    return node;
+  }
+  function renderNetwork() {
+    network.innerHTML="";
+    makeEdges().forEach(function(edge){createThread(edge[0],edge[1]);});
+    entries.forEach(function(item,index){network.appendChild(createNode(item,index));});
+  }
+  function projectPoint(point) {
+    var rect=viewport.getBoundingClientRect();
+    var yaw=(camera.yaw+drift.x*.004)*Math.PI/180;
+    var pitch=(camera.pitch-drift.y*.003)*Math.PI/180;
+    var dx=point.x-camera.x, dy=point.y-camera.y, dz=point.z-camera.z;
+    var cp=Math.cos(pitch), sp=Math.sin(pitch);
+    var pitchedY=dy*cp-dz*sp;
+    var pitchedZ=dy*sp+dz*cp;
+    var cy=Math.cos(yaw), sy=Math.sin(yaw);
+    var viewX=dx*cy-pitchedZ*sy;
+    var viewZ=dx*sy+pitchedZ*cy;
+    var focal=1150;
+    var distance=focal-viewZ;
+    if (distance<90) return null;
+    var scale=focal/distance;
+    if (scale<.025) return null;
+    return {x:rect.width/2+viewX*scale+drift.x,
+            y:rect.height/2+pitchedY*scale+drift.y,
+            scale:scale,depth:viewZ};
+  }
+  function updateWorld() {
+    drift.x+=(driftTarget.x-drift.x)*.065;
+    drift.y+=(driftTarget.y-drift.y)*.065;
+    var nodeList=network.querySelectorAll(".node");
+    Array.prototype.forEach.call(nodeList,function(node){
+      var index=Number(node.dataset.positionIndex), p=positions[index], projected=projectPoint(p);
+      if (!projected) { node.style.display="none"; return; }
+      node.style.display="block";
+      node.style.width=(p.w*projected.scale)+"px";
+      node.style.height=(p.h*projected.scale)+"px";
+      node.style.transform="translate3d("+projected.x+"px,"+projected.y+"px,0) translate(-50%,-50%) rotate("+p.rz+"deg)";
+      node.style.zIndex=String(Math.round(10000+projected.depth));
+    });
+    Array.prototype.forEach.call(network.querySelectorAll(".thread"),function(line){
+      var a=projectPoint(positions[Number(line.dataset.a)]);
+      var b=projectPoint(positions[Number(line.dataset.b)]);
+      if (!a || !b) { line.style.display="none"; return; }
+      var dx=b.x-a.x, dy=b.y-a.y;
+      line.style.display="block";
+      line.style.left=a.x+"px";
+      line.style.top=a.y+"px";
+      line.style.width=Math.hypot(dx,dy)+"px";
+      line.style.transform="rotate("+Math.atan2(dy,dx)+"rad)";
+      line.style.zIndex="0";
+    });
+  }
+  function moveCamera(forward,strafe,rise,distance) {
+    var length=Math.hypot(forward,strafe,rise);
+    if (!length) return;
+    forward/=length; strafe/=length; rise/=length;
+    var yaw=camera.yaw*Math.PI/180, pitch=camera.pitch*Math.PI/180;
+    camera.x+=(Math.sin(yaw)*Math.cos(pitch)*forward+Math.cos(yaw)*strafe)*distance;
+    camera.y+=(-Math.sin(pitch)*forward-rise)*distance;
+    camera.z+=(-Math.cos(yaw)*Math.cos(pitch)*forward+Math.sin(yaw)*strafe)*distance;
+  }
+  function animationFrame(timestamp) {
+    if (!lastFrame) lastFrame=timestamp;
+    var dt=Math.min((timestamp-lastFrame)/1000,.04);
+    lastFrame=timestamp;
+    var forward=(keys.w||keys.ArrowUp?1:0)-(keys.s||keys.ArrowDown?1:0);
+    var strafe=(keys.d?1:0)-(keys.a?1:0);
+    var rise=(keys.q?1:0)-(keys.e?1:0);
+    var turn=(keys.ArrowRight?1:0)-(keys.ArrowLeft?1:0);
+    if (turn) camera.yaw+=turn*92*dt;
+    if (forward||strafe||rise) moveCamera(forward,strafe,rise,(keys.Shift?390:245)*dt);
+    updateWorld();
+    requestAnimationFrame(animationFrame);
+  }
+  function recenter() {
+    camera={x:0,y:0,z:0,yaw:0,pitch:0};
+    driftTarget={x:0,y:0};
+  }
+  renderNetwork();
+  updateWorld();
+  requestAnimationFrame(animationFrame);
+
+  document.getElementById("recenter").addEventListener("click",recenter);
+  document.addEventListener("keydown",function(event){
+    if (event.target.closest && event.target.closest(".letter-body")) return;
+    var key=event.key.length===1?event.key.toLowerCase():event.key;
+    if (["w","a","s","d","q","e","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Shift"].indexOf(key)>=0) {
+      keys[key]=true;
+      if (key.indexOf("Arrow")===0) event.preventDefault();
+    }
+  });
+  document.addEventListener("keyup",function(event){
+    var key=event.key.length===1?event.key.toLowerCase():event.key;
+    keys[key]=false;
+  });
+  window.addEventListener("blur",function(){keys=Object.create(null);});
+  viewport.addEventListener("pointermove",function(event){
+    if (dragging) return;
+    var rect=viewport.getBoundingClientRect();
+    driftTarget.x=((event.clientX-rect.left)/rect.width-.5)*76;
+    driftTarget.y=((event.clientY-rect.top)/rect.height-.5)*54;
+  });
+  viewport.addEventListener("wheel",function(event){
+    if (event.target.closest && event.target.closest(".letter-body")) return;
+    event.preventDefault();
+    var unit=event.deltaMode===1?20:(event.deltaMode===2?viewport.clientHeight:1);
+    var forward=0, strafe=0, rise=0;
+    if (event.altKey) rise=-(event.deltaY||event.deltaX)*unit;
+    else { forward=-event.deltaY*unit; strafe=event.deltaX*unit; }
+    var magnitude=Math.min(140,Math.hypot(forward,strafe,rise));
+    if (magnitude) { moveCamera(forward,strafe,rise,magnitude*.9); updateWorld(); }
+  },{passive:false});
+  viewport.addEventListener("pointerdown",function(event){
+    if (event.target.closest(".node-button")||event.target.closest("button")) return;
+    dragging=true;
+    previousPointer={x:event.clientX,y:event.clientY};
+    driftTarget={x:0,y:0};
+    viewport.classList.add("dragging");
+    try { viewport.setPointerCapture(event.pointerId); } catch(error) {}
+  });
+  viewport.addEventListener("pointermove",function(event){
+    if (!dragging||!previousPointer) return;
+    var dx=event.clientX-previousPointer.x, dy=event.clientY-previousPointer.y;
+    camera.yaw+=dx*.22;
+    camera.pitch=Math.max(-62,Math.min(62,camera.pitch-dy*.17));
+    previousPointer={x:event.clientX,y:event.clientY};
+  });
+  function stopDrag(){dragging=false;previousPointer=null;viewport.classList.remove("dragging");}
+  viewport.addEventListener("pointerup",stopDrag);
+  viewport.addEventListener("pointercancel",stopDrag);
+  Array.prototype.forEach.call(document.querySelectorAll(".move-key"),function(button){
+    var key=button.getAttribute("data-key");
+    button.addEventListener("pointerdown",function(event){event.preventDefault();keys[key]=true;button.setPointerCapture(event.pointerId);});
+    button.addEventListener("pointerup",function(){keys[key]=false;});
+    button.addEventListener("pointercancel",function(){keys[key]=false;});
+    button.addEventListener("lostpointercapture",function(){keys[key]=false;});
+  });
+  } catch(error) { reportLoadProblem("The gallery hit an error while opening: "+(error && error.message ? error.message : error)); }
+}());
+</script>
+</body>
+</html>
